@@ -3,28 +3,30 @@ import os
 import hashlib
 import os
 import configparser
-from passlib.hash import sha512_crypt
+from passlib.hash import sha256_crypt
+from Crypto.Hash import SHA256
 from Crypto.Cipher import AES
 from Crypto import Random
 
 def hash(password):
-	return sha512_crypt.encrypt(password)
+	return sha256_crypt.encrypt(password)
 	
+
+
+	
+
+BS = 16
+pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+unpad = lambda s : s[0:-ord(s[-1])]
+
+
+
 
 def broadcast_message(server_socket,socket, message):
 	#broadcast message to everyone
 	for s in socket_list:
 		if s is not server_socket and s is not socket:
-			socket.send(message)
-	
-	
-def pad(text):
-	return text + (AES.block_size - len(AES.block_size) % AES.block_size * chr(AES.block_size - len(text) % AES.block_size))
-	
-
-def unpad(text):
-	return text[:-ord(text[len(text)-1:])]
-
+			socket.send(message.encode())
 
 
 
@@ -39,20 +41,39 @@ PASSWORD=config['details']['PASSWORD']
 KEY=hash(PASSWORD)
 socket_list=[]
 
+'''
 def encrypt(raw_data):
-	raw_data=pad(raw_data)
-	IV= Random.new().read(AES.block_size)
-	cipher= AES.new(KEY, AES.MODE_CBC, IV)
-	return base64.b64encode(IV + cipher.encrypt(raw_data))
+	return raw_data
+	#raw_data = pad(raw_data)
+	#iv = Random.new().read(AES.block_size)
+	#cipher = AES.new(KEY, AES.MODE_CBC, iv)
+	#return base64.b64encode( iv + cipher.encrypt( raw_data ) )
+	
 
 
 def decrypt(encrypted_text):
-	encrypted_text=base64.b64decode(encrypted_text) 
-	IV= cipher[:AES.block_size]
-	cipher = AES.new(KEY, AES.MODE_CBC, IV)
-	return unpad(cipher.decrypt(encrypted_text[AES.block_size:])).decode()
+	return raw_data
 
 
+'''
+
+def encrypt(secret,data):
+	BLOCK_SIZE = 32
+	PADDING = '{'
+	pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
+	EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
+	cipher = AES.new(secret)
+	encoded = EncodeAES(cipher, data)
+	return encoded
+
+def decrypt(secret,data):
+	BLOCK_SIZE = 32
+	PADDING = '{'
+	pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
+	DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
+	cipher = AES.new(secret)
+	decoded = DecodeAES(cipher, data)
+	return decoded
 
 def server():
 
@@ -76,7 +97,7 @@ def server():
 				conn_socket, address = server_socket.accept()
 				socket_list.append(conn_socket)
 				
-				broadcast_message(server_socket, conn_socket, encrypt("(%s,%s) entered chat room\n" % address))
+				broadcast_message(server_socket, conn_socket, encrypt(KEY,"(%s,%s) entered chat room\n" % address))
 			else:
 				try:
 					data = s.recv(4096)
@@ -88,11 +109,12 @@ def server():
 					else:
 						if socket in socket_list:
 							socket_list.remove(s)
-							broadcast_message(server_socket, s, encrypt("user (%s, %s) went offline\n" % address))
+							broadcast_message(server_socket, s, encrypt(KEY,"user (%s, %s) went offline\n" % address))
 					
 				except:
-					broadcast_message(server_socket, s, encrypt("User (%s, %s) is offline\n" % address))
+					broadcast_message(server_socket, s, encrypt(KEY,"User (%s, %s) is offline\n" % address))
 					continue
+	server_socket.close()
 
 
 if __name__=="__main__":
