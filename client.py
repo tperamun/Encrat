@@ -6,23 +6,25 @@ import base64
 import sys
 import socket, select
 
-def pad(text):
-	return text + (AES.block_size - len(AES.block_size) % AES.block_size * chr(AES.block_size - len(text) % AES.block_size))
-	
 
-def unpad(text):
-	return text[:-ord(text[len(text)-1:])]
-	
 def hash(password):
-	return sha512_crypt.encrypt(password) #created using salts. Therefore every message
-	#returns a different hash even if it is the same message
+	return hashlib.sha256(bytes(password, encoding= 'utf-8')).hexdigest()
 
 def encrypt(raw_data):
-	return raw_data
+	pad = lambda s: s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
+	raw_data = pad(raw_data)
+	iv = Random.new().read(AES.block_size)
+	cipher = AES.new(KEY, AES.MODE_CBC, iv)
+	return base64.urlsafe_b64encode(iv + cipher.encrypt(raw_data))
+	
 
 
 def decrypt(encrypted_text):
-	return encrypted_text
+	unpad = lambda s : s[:-ord(s[len(s) -1:])]
+	encrypted_text = base64.urlsafe_b64decode(encrypted_text)
+	iv = encrypted_text[:AES.block_size]
+	cipher = AES.new(KEY, AES.MODE_CBC, iv)
+	return unpad(cipher.decrypt(encrypted_text[AES.block_size:]))
 
 
 def client():

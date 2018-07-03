@@ -9,7 +9,7 @@ from Crypto.Cipher import AES
 from Crypto import Random
 
 def hash(password):
-	return sha256_crypt.encrypt(password)
+	return hashlib.sha256(bytes(password, encoding= 'utf-8')).hexdigest()
 	
 
 
@@ -26,7 +26,7 @@ def broadcast_message(server_socket,socket, message):
 	#broadcast message to everyone
 	for s in socket_list:
 		if s is not server_socket and s is not socket:
-			socket.send(message.encode())
+			socket.send(message)
 
 
 
@@ -41,39 +41,28 @@ PASSWORD=config['details']['PASSWORD']
 KEY=hash(PASSWORD)
 socket_list=[]
 
-'''
+
 def encrypt(raw_data):
-	return raw_data
-	#raw_data = pad(raw_data)
-	#iv = Random.new().read(AES.block_size)
-	#cipher = AES.new(KEY, AES.MODE_CBC, iv)
-	#return base64.b64encode( iv + cipher.encrypt( raw_data ) )
+	pad = lambda s: s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
+	raw_data = pad(raw_data)
+	iv = Random.new().read(AES.block_size)
+	print("iv", sys.getsizeof(iv))
+	print("KEY", sys.getsizeof(KEY))
+	cipher = AES.new(KEY, AES.MODE_CBC, iv)
+	return base64.urlsafe_b64encode(iv + cipher.encrypt(raw_data))
 	
 
 
 def decrypt(encrypted_text):
-	return raw_data
+	unpad = lambda s : s[:-ord(s[len(s) -1:])]
+	encrypted_text = base64.urlsafe_b64decode(encrypted_text)
+	iv = encrypted_text[:AES.block_size]
+	sys.getsizeof(iv)
+	cipher = AES.new(KEY, AES.MODE_CBC, iv)
+	return unpad(cipher.decrypt(encrypted_text[AES.block_size:]))
+	
 
 
-'''
-
-def encrypt(secret,data):
-	BLOCK_SIZE = 32
-	PADDING = '{'
-	pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
-	EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
-	cipher = AES.new(secret)
-	encoded = EncodeAES(cipher, data)
-	return encoded
-
-def decrypt(secret,data):
-	BLOCK_SIZE = 32
-	PADDING = '{'
-	pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
-	DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
-	cipher = AES.new(secret)
-	decoded = DecodeAES(cipher, data)
-	return decoded
 
 def server():
 
@@ -97,7 +86,7 @@ def server():
 				conn_socket, address = server_socket.accept()
 				socket_list.append(conn_socket)
 				
-				broadcast_message(server_socket, conn_socket, encrypt(KEY,"(%s,%s) entered chat room\n" % address))
+				broadcast_message(server_socket, conn_socket, encrypt("(%s,%s) entered chat room\n" % address))
 			else:
 				try:
 					data = s.recv(4096)
@@ -109,10 +98,10 @@ def server():
 					else:
 						if socket in socket_list:
 							socket_list.remove(s)
-							broadcast_message(server_socket, s, encrypt(KEY,"user (%s, %s) went offline\n" % address))
+							broadcast_message(server_socket, s, encrypt("user (%s, %s) went offline\n" % address))
 					
 				except:
-					broadcast_message(server_socket, s, encrypt(KEY,"User (%s, %s) is offline\n" % address))
+					broadcast_message(server_socket, s, encrypt("User (%s, %s) is offline\n" % address))
 					continue
 	server_socket.close()
 
