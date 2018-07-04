@@ -54,6 +54,13 @@ def decrypt(encrypted_text,KEY,iv):
 	msg = cipher.decrypt(encrypted_text).decode("utf-8")
 	return msg
 	
+config=configparser.ConfigParser()
+config.read('config.ini')
+
+HOST=config['details']['HOST']
+PORT=int(config['details']['PORT'])
+PASSWORD=config['details']['PASSWORD']
+socket_list=[]
 
 
 
@@ -117,23 +124,16 @@ def server():
 					message = SALT + message + iv
 					broadcast_message(server_socket, s, message)
 					continue
+
 	server_socket.close()
 
 
 
-config=configparser.ConfigParser()
-config.read('config.ini')
-
-HOST=config['details']['HOST']
-PORT=int(config['details']['PORT'])
-PASSWORD=config['details']['PASSWORD']
-socket_list=[]
 
 
 
-
-
-server()
+if __name__=="__main__":
+	sys.exit(server())
 
 
 

@@ -10,26 +10,6 @@ from Crypto.Protocol.KDF import PBKDF2
 
 
 
-if len(sys.argv) != 5:
-	print ('Usage: python client.py <hostname> <port> <name> <password>')
-		
-	
-HOST=sys.argv[1]
-PORT=int(sys.argv[2])
-NAME=sys.argv[3]
-PASSWORD=sys.argv[4]
-
-
-
-print("HOST", HOST)
-print("PORT", PORT)
-print("NAME", NAME)
-print("PASSWORD", PASSWORD)
-#print("KEY", KEY)
-
-#def hash(password):
-	#return hashlib.sha256(bytes(password, encoding= 'utf-8')).digest()
-
 def make_key(password, salt=None):
 	if salt is None:
 		salt = Random.new().read(8)
@@ -55,6 +35,17 @@ def decrypt(encrypted_text,KEY,iv):
 
 def client():
 
+
+
+	
+	if len(sys.argv) != 5:
+		print ('Usage: python client.py <hostname> <port> <name> <password>')
+		sys.exit()
+	
+	HOST=sys.argv[1]
+	PORT=int(sys.argv[2])
+	NAME=sys.argv[3]
+	PASSWORD=sys.argv[4]
 	
 #	print("HOST", HOST)
 #	print("PORT", PORT)
@@ -64,6 +55,7 @@ def client():
 	
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.settimeout(2)
+
 	try:
 		s.connect((HOST, PORT))
 	except:
@@ -77,26 +69,27 @@ def client():
 	
 	while True:
 		socket_list= [sys.stdin, s]
-		readers, _,_= select.select(socket_list, [], [])
+		readers, writers,errors= select.select(socket_list, [], [])
 		#print(readers)
 		for skt in readers:
 			
 			if skt == s:
 				data = skt.recv(4096)
-				
+				print("data length", len(data))
+
 				if not data:
 					print("\033[1;32;40m Disconnected from Encrat Server \n");
 					sys.exit()
 				else:
 					salt = data[0:8]
-					iv = data[-16:]
-					data =data[8:]
+					iv   = data[-16:]
+					data = data[8:]
 					data = data[:-16]
 
 					KEY, _ =make_key(PASSWORD, salt)
 					data = decrypt(data, KEY, iv)
 					sys.stdout.write(data)
-					sys.stdout.write("\033[1;32;40m"+"\n [Me]"+"\033[0m");sys.stdout.flush()
+					sys.stdout.write("\033[1;32;40m"+"\n [Me :]"+"\033[0m");sys.stdout.flush()
 	
 			else:
 				
@@ -104,12 +97,8 @@ def client():
 				message = '['+NAME+']: '+message
 				key, salt = make_key(PASSWORD)
 				ciphertext, iv = encrypt(message, key)
-				#print("ciphertext", len(ciphertext))
-				#print("iv", len(iv)) #16
-				#print("salt", len(salt)) #8
 				ciphertext = salt + ciphertext + iv
-				#IV=iv
-				#print(type(message))
+				print("the cipher", ciphertext)
 				s.send(ciphertext)
 				sys.stdout.write("\033[34m"+'\n[Me :] '+ "\033[0m"); sys.stdout.flush()
 	
@@ -118,7 +107,8 @@ def client():
 	
 		
 
-client()
+if __name__ =="__main__":
+	sys.exit(client())
 	
 	
 	
