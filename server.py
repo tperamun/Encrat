@@ -3,22 +3,30 @@ import os
 import hashlib
 import os
 import configparser
-from passlib.hash import sha256_crypt
 from Crypto.Hash import SHA256
 from Crypto.Cipher import AES
 from Crypto import Random
+from Crypto.Protocol.KDF import PBKDF2
 
-def hash(password):
-	return hashlib.sha256(bytes(password, encoding= 'utf-8')).hexdigest()
+
+
+
+
+
+
+
+
+
+#def hash(password):
+#	return hashlib.sha256(bytes(password, encoding= 'utf-8')).digest()
 	
 
-
+def make_key(password, salt=None):
+	if salt is None:
+		salt = Random.new().read(8)
 	
-
-BS = 16
-pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
-unpad = lambda s : s[0:-ord(s[-1])]
-
+	key = PBKDF2(password, salt, AES.block_size, 10000)
+	return (key, salt)
 
 
 
@@ -28,38 +36,18 @@ def broadcast_message(server_socket,socket, message):
 		if s is not server_socket and s is not socket:
 			socket.send(message)
 
-
-
-
-
-config=configparser.ConfigParser()
-config.read('config.ini')
-
-HOST=config['details']['HOST']
-PORT=int(config['details']['PORT'])
-PASSWORD=config['details']['PASSWORD']
-KEY=hash(PASSWORD)
-socket_list=[]
-
-
-def encrypt(raw_data):
-	pad = lambda s: s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
-	raw_data = pad(raw_data)
+def encrypt(raw_data, KEY):
 	iv = Random.new().read(AES.block_size)
-	print("iv", sys.getsizeof(iv))
-	print("KEY", sys.getsizeof(KEY))
-	cipher = AES.new(KEY, AES.MODE_CBC, iv)
-	return base64.urlsafe_b64encode(iv + cipher.encrypt(raw_data))
+	cipher = AES.new(KEY, AES.MODE_CFB, iv)
+	ciphertext = cipher.encrypt(raw_data.encode("utf-8"))
+	return (ciphertext, iv)
 	
 
 
-def decrypt(encrypted_text):
-	unpad = lambda s : s[:-ord(s[len(s) -1:])]
-	encrypted_text = base64.urlsafe_b64decode(encrypted_text)
-	iv = encrypted_text[:AES.block_size]
-	sys.getsizeof(iv)
-	cipher = AES.new(KEY, AES.MODE_CBC, iv)
-	return unpad(cipher.decrypt(encrypted_text[AES.block_size:]))
+def decrypt(encrypted_text,KEY,iv):
+	cipher = AES.new(KEY, AES.MODE_CFB, iv)
+	msg = cipher.decrypt(encrypted_text).decode("utf-8")
+	return msg
 	
 
 
@@ -85,12 +73,18 @@ def server():
 				#when a client first connects
 				conn_socket, address = server_socket.accept()
 				socket_list.append(conn_socket)
-				
-				broadcast_message(server_socket, conn_socket, encrypt("(%s,%s) entered chat room\n" % address))
+
+				PASSWORD=config['details']['PASSWORD']
+				KEY, SALT =make_key(PASSWORD)
+				ciphertext, iv = encrypt("(%s,%s) entered chat room\n" % address, KEY)
+				IV=iv
+				broadcast_message(server_socket, conn_socket, ciphertext)
 			else:
 				try:
 					data = s.recv(4096)
-					data = decrypt(data)
+					
+					KEY, _ = make_key(PASSWORD,SALT)
+					data = decrypt(ciphertext, KEY, IV)
 				
 					if data:
 						broadcast_message(server_socket, s, data)
@@ -98,16 +92,35 @@ def server():
 					else:
 						if socket in socket_list:
 							socket_list.remove(s)
-							broadcast_message(server_socket, s, encrypt("user (%s, %s) went offline\n" % address))
+							ciphertext, iv = encrypt("user (%s, %s) went offline\n" % address)
+							IV=iv							
+							broadcast_message(server_socket, s, ciphertext)
 					
 				except:
-					broadcast_message(server_socket, s, encrypt("User (%s, %s) is offline\n" % address))
+					PASSWORD=config['details']['PASSWORD']
+					KEY, SALT =make_key(PASSWORD)
+					ciphertext, iv = encrypt("User (%s, %s) is offline\n" % address,KEY)
+					IV=iv
+					broadcast_message(server_socket, s, ciphertext)
 					continue
 	server_socket.close()
 
 
-if __name__=="__main__":
-	server()
+
+config=configparser.ConfigParser()
+config.read('config.ini')
+
+HOST=config['details']['HOST']
+PORT=int(config['details']['PORT'])
+#PASSWORD=config['details']['PASSWORD']
+#KEY, SALT =make_key(PASSWORD)
+socket_list=[]
+IV = None
+
+
+
+
+server()
 
 
 
