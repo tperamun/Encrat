@@ -30,11 +30,16 @@ def make_key(password, salt=None):
 
 
 
-def broadcast_message(server_socket,socket, message):
+def broadcast_message(server_socket,sock, message):
 	#broadcast message to everyone
 	for s in socket_list:
-		if s is not server_socket and s is not socket:
-			socket.send(message)
+		if s != server_socket and s != sock:
+			try:
+				socket.send(message)
+			except:
+				s.close()
+				if s in socket_list:
+					socket_list.remove(s)
 
 def encrypt(raw_data, KEY):
 	iv = Random.new().read(AES.block_size)
@@ -55,8 +60,9 @@ def decrypt(encrypted_text,KEY,iv):
 def server():
 
 	server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #TCP Connection
+	server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	server_socket.bind((HOST, PORT))
-	server_socket.listen(5)
+	server_socket.listen(10)
 	
 	
 	socket_list.append(server_socket)
@@ -70,38 +76,46 @@ def server():
 		for s in readers:
 			
 			if s==server_socket:
-				#when a client first connects
 				conn_socket, address = server_socket.accept()
 				socket_list.append(conn_socket)
-
+				print ("user (%s, %s) connected" % address)
 				PASSWORD=config['details']['PASSWORD']
 				KEY, SALT =make_key(PASSWORD)
 				ciphertext, iv = encrypt("(%s,%s) entered chat room\n" % address, KEY)
-				IV=iv
+				ciphertext  = SALT + ciphertext + iv
 				broadcast_message(server_socket, conn_socket, ciphertext)
 			else:
 				try:
 					data = s.recv(4096)
 					
-					KEY, _ = make_key(PASSWORD,SALT)
-					data = decrypt(ciphertext, KEY, IV)
-				
+					salt = data[0:8]
+					iv = data[-16:]
+					data= data[8:]
+					data=data[:-16]
+					KEY, _ = make_key(PASSWORD,salt)
+
+					data = decrypt(ciphertext, KEY, iv)
 					if data:
+
 						broadcast_message(server_socket, s, data)
 					
 					else:
-						if socket in socket_list:
+						if s in socket_list:
 							socket_list.remove(s)
-							ciphertext, iv = encrypt("user (%s, %s) went offline\n" % address)
-							IV=iv							
+							PASSWORD=config['details']['PASSWORD']
+							KEY, SALT =make_key(PASSWORD)
+							
+							ciphertext, iv = encrypt("user (%s, %s) went offline\n" % address, KEY)
+							print("ciphertext lulu", len(ciphertext)) 
+							ciphertext  = SALT + ciphertext + iv
 							broadcast_message(server_socket, s, ciphertext)
 					
 				except:
 					PASSWORD=config['details']['PASSWORD']
 					KEY, SALT =make_key(PASSWORD)
-					ciphertext, iv = encrypt("User (%s, %s) is offline\n" % address,KEY)
-					IV=iv
-					broadcast_message(server_socket, s, ciphertext)
+					message, iv= encrypt("user (%s, %s) is offline\n" % address, KEY)
+					message = SALT + message + iv
+					broadcast_message(server_socket, s, message)
 					continue
 	server_socket.close()
 
@@ -112,10 +126,9 @@ config.read('config.ini')
 
 HOST=config['details']['HOST']
 PORT=int(config['details']['PORT'])
-#PASSWORD=config['details']['PASSWORD']
-#KEY, SALT =make_key(PASSWORD)
+PASSWORD=config['details']['PASSWORD']
 socket_list=[]
-IV = None
+
 
 
 

@@ -73,8 +73,8 @@ def client():
 	print("Connection established. You can start sending messages")
 	sys.stdout.write("\033[34m"+'\n[Me :] '+ "\033[0m");sys.stdout.flush()
 	
-	salt_global = None
-	iv_global = None
+
+	
 	while True:
 		socket_list= [sys.stdin, s]
 		readers, _,_= select.select(socket_list, [], [])
@@ -86,13 +86,17 @@ def client():
 				
 				if not data:
 					print("\033[1;32;40m Disconnected from Encrat Server \n");
-				else:
-					global IV
-					KEY, _ =make_key(PASSWORD, salt_global)
-					data = decrypt(data, KEY, iv_global)
-					sys.stdout.write(data)
-					sys.stdout.write("\033[1;32;40m"+"\n [Me]"+"\033[0m")
 					sys.exit()
+				else:
+					salt = data[0:8]
+					iv = data[-16:]
+					data =data[8:]
+					data = data[:-16]
+
+					KEY, _ =make_key(PASSWORD, salt)
+					data = decrypt(data, KEY, iv)
+					sys.stdout.write(data)
+					sys.stdout.write("\033[1;32;40m"+"\n [Me]"+"\033[0m");sys.stdout.flush()
 	
 			else:
 				
@@ -100,8 +104,10 @@ def client():
 				message = '['+NAME+']: '+message
 				key, salt = make_key(PASSWORD)
 				ciphertext, iv = encrypt(message, key)
-				iv_global=iv
-				salt_global=salt
+				#print("ciphertext", len(ciphertext))
+				#print("iv", len(iv)) #16
+				#print("salt", len(salt)) #8
+				ciphertext = salt + ciphertext + iv
 				#IV=iv
 				#print(type(message))
 				s.send(ciphertext)
